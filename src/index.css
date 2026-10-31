@@ -1,0 +1,85 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg: #f8f7f4;
+    --panel-bg: #ffffff;
+    --inset-bg: #f8f7f4;
+    --ink: #1a1a1a;
+    --accent: #d42020;
+    --muted: #6b6b6b;
+    --safe: #2e7d32;
+    --border-color: #e6e4df;
+    --panel-shadow: 0 20px 40px rgba(0, 0, 0, 0.03);
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  .dark {
+    --bg: #0f1115;
+    --panel-bg: #161920;
+    --inset-bg: #0f1115;
+    --ink: #f2f0eb;
+    --accent: #f04444;
+    --muted: #9ca3af;
+    --safe: #4ade80;
+    --border-color: #262b36;
+    --panel-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  h1, h2, h3, .font-display, .font-serif-editorial {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  code, pre, .font-mono, .tabular-nums, .meta {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.editorial-panel {
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--panel-shadow);
+}
+
+.ledger-line {
+  height: 1px;
+  background-color: var(--border-color);
+  width: 100%;
+}
+
+/* Subtle editorial scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink);
+}

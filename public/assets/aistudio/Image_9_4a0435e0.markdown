@@ -1,0 +1,208 @@
+---
+name: Tactical Threat Interceptor
+colors:
+  surface: '#131313'
+  surface-dim: '#131313'
+  surface-bright: '#393939'
+  surface-container-lowest: '#0e0e0e'
+  surface-container-low: '#1b1c1c'
+  surface-container: '#1f2020'
+  surface-container-high: '#2a2a2a'
+  surface-container-highest: '#353535'
+  on-surface: '#e4e2e1'
+  on-surface-variant: '#e5bdba'
+  inverse-surface: '#e4e2e1'
+  inverse-on-surface: '#303030'
+  outline: '#ac8885'
+  outline-variant: '#5c403e'
+  surface-tint: '#ffb3ae'
+  primary: '#ffb3ae'
+  on-primary: '#68000b'
+  primary-container: '#ff5352'
+  on-primary-container: '#5c0009'
+  inverse-primary: '#bd0d21'
+  secondary: '#9cd0d3'
+  on-secondary: '#003739'
+  secondary-container: '#184e51'
+  on-secondary-container: '#8bbec1'
+  tertiary: '#74d9b7'
+  on-tertiary: '#00382a'
+  tertiary-container: '#39a183'
+  on-tertiary-container: '#003024'
+  error: '#ffb4ab'
+  on-error: '#690005'
+  error-container: '#93000a'
+  on-error-container: '#ffdad6'
+  primary-fixed: '#ffdad7'
+  primary-fixed-dim: '#ffb3ae'
+  on-primary-fixed: '#410004'
+  on-primary-fixed-variant: '#930014'
+  secondary-fixed: '#b8ecef'
+  secondary-fixed-dim: '#9cd0d3'
+  on-secondary-fixed: '#002021'
+  on-secondary-fixed-variant: '#184e51'
+  tertiary-fixed: '#91f6d3'
+  tertiary-fixed-dim: '#74d9b7'
+  on-tertiary-fixed: '#002117'
+  on-tertiary-fixed-variant: '#00513e'
+  background: '#131313'
+  on-background: '#e4e2e1'
+  surface-variant: '#353535'
+typography:
+  headline-xl:
+    fontFamily: Space Grotesk
+    fontSize: 48px
+    fontWeight: '700'
+    lineHeight: 56px
+  headline-xl-mobile:
+    fontFamily: Space Grotesk
+    fontSize: 32px
+    fontWeight: '700'
+    lineHeight: 40px
+  headline-lg:
+    fontFamily: Space Grotesk
+    fontSize: 36px
+    fontWeight: '600'
+    lineHeight: 44px
+  headline-lg-mobile:
+    fontFamily: Space Grotesk
+    fontSize: 26px
+    fontWeight: '600'
+    lineHeight: 34px
+  headline-md:
+    fontFamily: Space Grotesk
+    fontSize: 24px
+    fontWeight: '600'
+    lineHeight: 32px
+  headline-sm:
+    fontFamily: Space Grotesk
+    fontSize: 20px
+    fontWeight: '500'
+    lineHeight: 28px
+  body-lg:
+    fontFamily: JetBrains Mono
+    fontSize: 16px
+    fontWeight: '400'
+    lineHeight: 24px
+  body-md:
+    fontFamily: JetBrains Mono
+    fontSize: 14px
+    fontWeight: '400'
+    lineHeight: 22px
+  body-sm:
+    fontFamily: JetBrains Mono
+    fontSize: 12px
+    fontWeight: '400'
+    lineHeight: 18px
+  label-lg:
+    fontFamily: JetBrains Mono
+    fontSize: 13px
+    fontWeight: '600'
+    lineHeight: 18px
+  label-md:
+    fontFamily: JetBrains Mono
+    fontSize: 11px
+    fontWeight: '600'
+    lineHeight: 16px
+  label-sm:
+    fontFamily: JetBrains Mono
+    fontSize: 10px
+    fontWeight: '500'
+    lineHeight: 14px
+spacing:
+  gutter: 1rem
+  gutter-mobile: 0.75rem
+  margin: 1.5rem
+  margin-mobile: 1rem
+  space-xs: 0.25rem
+  space-sm: 0.5rem
+  space-md: 1rem
+  space-lg: 1.5rem
+  space-xl: 2.5rem
+---
+
+## Brand & Style
+
+The design system establishes a high-performance cyber defense posture for real-time scam detection, digital identity verification, and anti-fraud monitoring. Built for security analysts, incident responders, and high-risk digital users, the visual personality projects uncompromising authority, split-second clarity, and military-grade precision. 
+
+The aesthetic synthesizes tactical terminal brutalism with surgical telemetry ergonomics:
+- **Terminal Brutalism:** Exacting zero-radius geometric geometry, hairline technical borders, and high-density monospaced data grids.
+- **Threat Vector Hierarchy:** Visual alarms leverage high-visibility alert pigments directly mapped to risk velocity—from neutral telemetry baselines up to critical zero-day scam interception.
+- **Defensive Utility:** Elimination of decorative blur or soft organic shapes; every UI element functions as an instrumentation readout, tactical trigger, or defense status indicator.
+
+## Colors
+
+The palette is engineered around dark tactical surfaces and an indexed threat severity scale:
+
+- **Primary Alert Anchor (`#F94144`):** Intercept Red. Reserved strictly for critical severity threats, active fraud execution, emergency defensive stops, and live scam blocks.
+- **Secondary Structural Accent (`#3C6E71`):** Deep Cyber Teal. Used for secondary telemetry controls, verified protocol states, active scanner headers, and secondary badges.
+- **Tertiary Safe Anchor (`#43AA8B`):** Hardened Green. Signals verified clean status, zero detected vectors, certified cryptographic hashes, and live operational health.
+- **Neutral Surface Foundation (`#353535`):** Carbon Charcoal. Anchor for terminal background canvases, structural card surfaces, command headers, and baseline data tables.
+
+### Threat Progression & Auxiliary Accents
+- **Level 4 Critical:** `#F94144` (Breach / Impersonation Scam Detected)
+- **Level 3 Severe:** `#F3722C` (High Probability Phishing Pattern)
+- **Level 2 Warning:** `#F8961E` / `#F9844A` (Suspicious Network / Unverified Sender)
+- **Level 1 Caution:** `#F9C74F` (Elevated Risk Score / Domain Inconsistency)
+- **Level 0 Safe:** `#90BE6D` / `#43AA8B` (Encrypted / Verified Entity)
+- **Telemetry & Infrastructure:** `#4D908E` (System Telemetry), `#577590` (Diagnostic Inactive), `#277DA1` (Network Uplink), `#284B63` (Deep Tactical Infill).
+- **Text & Surface Boundaries:** Pure high-visibility typography via `#FFFFFF`, subtle rule dividers and secondary text in `#D9D9D9`.
+
+## Typography
+
+The type system balances technical urgency with tabular legibility:
+- **Headlines (Space Grotesk):** Engineered for rapid tactical ingestion. Space Grotesk introduces structured geometric precision to section titles, critical alerts, and global intercept counters.
+- **Telemetry & Body (JetBrains Mono):** Designed for uninterrupted reading of threat code, IP logs, DNS records, token balances, and system messages. The fixed-width pitch guarantees tabular alignment across high-throughput data streams.
+- **Labels & Micro-Data:** Always rendered in uppercase monospaced text with tight vertical bounding boxes to mirror radar displays and hardware consoles.
+
+## Layout & Spacing
+
+The layout utilizes a strict, non-elastic 12-column terminal grid:
+- **Desktop (1200px+):** 12 columns with `1rem` gutters and `1.5rem` outer margins. Modules prioritize simultaneous multi-stream readouts (e.g., Threat Monitor + Live Feed + Hash Verification side-by-side).
+- **Tablet (768px - 1199px):** 6 columns with `1rem` gutters and `1.25rem` margins. Threat streams stack into vertical telemetry panels.
+- **Mobile (< 768px):** 4 columns with `0.75rem` gutters and `1rem` margins. Data feeds collapse into full-width cards with locked monospaced action bars pinned to viewport anchors.
+- **Rhythm:** Spacing follows compact mathematical intervals (`0.25rem` base) to maintain dense information capacity without clutter.
+
+## Elevation & Depth
+
+This system intentionally rejects ambient soft drop-shadows and glass blurs in favor of architectural **Tonal Layers** and **Crisp Structural Borders**:
+
+1. **Base Layer (Canvas):** Pure `#1A1D20` or `#212529` ground plane.
+2. **Surface Tier 1 (Containers & Panels):** Inset surfaces tinted `#353535` with solid `1px` outer borders tinted `#284B63` or `#577590`.
+3. **Surface Tier 2 (Elevated Modals & Alerts):** `#284B63` solid background bordered by `#D9D9D9` at 40% opacity, accented with a 2px top edge indicator in `#F94144` or `#43AA8B`.
+4. **Active/Armed Layer (Interactive State):** Hard offset drop (2px 2px 0px `#000000`) creating a mechanical stepped surface rather than an ambient glow.
+
+## Shapes
+
+The design system enforces strict zero-radius (`0px`) sharp geometry across every component:
+- **Borders & Shells:** Crisp 90-degree squared corners for buttons, input fields, notification badges, status pills, and tactical cards.
+- **Cut Corners (Accent Option):** Interactive defense controls may optionally use a 45-degree chamfered corner (`4px` clip-path) on top-right edges to signify executable interception tools.
+
+## Components
+
+### Buttons
+- **Primary Intercept (Danger/Stop):** Background `#F94144`, text `#FFFFFF`, border `1px solid #F94144`, 0px radius. Hover: `#F3722C`. Focus: 2px offset border in `#FFFFFF`.
+- **Secondary Tactical:** Background `transparent`, text `#D9D9D9`, border `1px solid #3C6E71`. Hover: background `#3C6E71`, text `#FFFFFF`.
+- **Ghost Action:** Background `transparent`, text `#577590`, border `1px solid transparent`. Hover: border `1px solid #577590`.
+
+### Cards & Telemetry Containers
+- **Default Card:** Surface `#353535`, border `1px solid #284B63`, padding `1.25rem`. Header features monospaced tracker label and a status indicator square.
+- **Threat Detected Card:** Surface `#2B1D20`, border `1px solid #F94144`, with a solid `#F94144` 3px left edge bar.
+- **Verified Safe Card:** Surface `#1C2926`, border `1px solid #43AA8B`, with a solid `#43AA8B` 3px left edge bar.
+
+### Defense Status Badges & Chips
+- **Severity Chips:** Monospaced 10px uppercase, `0.25rem` vertical and `0.5rem` horizontal padding.
+  - Critical: Background `#F94144`, text `#FFFFFF`.
+  - Warning: Background `#F8961E`, text `#1A1D20`.
+  - Safe: Background `#43AA8B`, text `#FFFFFF`.
+  - Neutral / Info: Background `#284B63`, text `#D9D9D9`.
+
+### Input Fields & Search Bars
+- **Telemetry Inputs:** Background `#23272A`, text `#FFFFFF`, placeholder `#577590`, border `1px solid #3C6E71`, padding `0.625rem 0.875rem`, font `JetBrains Mono`. Focus: border `1px solid #F9C74F` with zero glow.
+
+### Checkboxes & Radios
+- **Checkboxes:** Squared `16px x 16px` box with `1px solid #D9D9D9`. Checked state fills with `#F94144` displaying an angular checkmark.
+- **Radios:** Squared `16px x 16px` box with inner `8px x 8px` solid square center on active state.
+
+### Threat Vector Indicators & Meters
+- Segmented linear defense bars (10 discrete rectangular blocks) mapping system exposure levels from `#43AA8B` (Safe) through `#F9C74F`, `#F8961E`, up to `#F94144` (Imminent Scam Breach).

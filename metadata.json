@@ -1,0 +1,6 @@
+{
+  "name": "Dhaal — AI Cyber Defense & Scam Interceptor",
+  "description": "AI-powered scam interception, WhatsApp protection, controlled voice stings, scam radar networks, family safety circles, and 1930/NCRP recovery & bank unfreeze support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
