@@ -347,28 +347,6 @@ export default function App() {
             Dhaal Defence
           </a>
 
-          {/* Zone 2: Concise single-line text navigation links */}
-          <nav
-            aria-label="Primary Navigation"
-            className="hidden md:flex items-center gap-10 text-xs font-semibold uppercase tracking-[0.06em] text-[#1a1a1a] dark:text-[#f2f0eb]"
-          >
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                id={`nav-tab-${item.id}`}
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                className={`py-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer border-b-2 ${
-                  activeTab === item.id
-                    ? 'text-[#d42020] dark:text-[#ff5c5c] border-[#d42020] dark:border-[#ff5c5c] font-bold'
-                    : 'border-transparent text-[#1a1a1a] dark:text-[#f2f0eb] hover:text-[#d42020] dark:hover:text-[#ff5c5c]'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
           {/* Zone 3: 1 primary action */}
           <div className="flex items-center shrink-0">
             <button

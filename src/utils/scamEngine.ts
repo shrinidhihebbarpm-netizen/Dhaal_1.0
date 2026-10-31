@@ -277,9 +277,36 @@ export function extractIOCsFromText(text: string): ExtractedIOCs {
     'punjabnationalbank.in',
     'bankofbaroda.in',
     'canarabank.com',
+    'kotak.com',
+    'yesbank.in',
+    'indusind.com',
+    'idfcfirstbank.com',
     'indiapost.gov.in',
     'ceir.gov.in',
     'sancharsaathi.gov.in',
+    'amazon.in',
+    'amazon.com',
+    'flipkart.com',
+    'myntra.com',
+    'swiggy.com',
+    'swiggy.in',
+    'zomato.com',
+    'tatadigital.com',
+    'tatacliq.com',
+    'jio.com',
+    'airtel.in',
+    'google.com',
+    'apple.com',
+    'microsoft.com',
+    'irctc.co.in',
+    'makemytrip.com',
+    'uber.com',
+    'olacabs.com',
+    'paytm.com',
+    'phonepe.com',
+    'cred.club',
+    'razorpay.com',
+    'cashfree.com',
   ];
 
   const isLegitDomain = (url: string) => {
@@ -856,9 +883,72 @@ export function analyzeScamPayload(
     iocs.upiIds.length === 0 &&
     iocs.bankAccounts.length === 0;
 
+  // Check for verified official business account communications (e.g. Amazon, Flipkart WhatsApp Business Account)
+  const hasVerifiedBusinessAccountSignal = matchesAny(lower, [
+    'business account',
+    'verified business',
+    'verified account',
+    'official account',
+    'amazon.in',
+    'amazon.com',
+    'flipkart.com',
+    'myntra.com',
+    'swiggy.com',
+    'zomato.com',
+    'tatadigital.com',
+    'great indian festival',
+    'blockbuster deals',
+    'shop all deals',
+    'shop now',
+    'reply stop to unsubscribe',
+    'stop to unsubscribe',
+    'visit amazon.in',
+    'visit flipkart',
+    '[verified_official_channel]',
+  ]);
+
+  const hasMaliciousPayloadSignals =
+    isDigitalArrest ||
+    isVoiceCloneSos ||
+    isFakeDeliveryTrap ||
+    isLotteryPrizeTrap ||
+    isUpiTrap ||
+    matchesAny(lower, [
+      '.apk',
+      'apk',
+      'anydesk',
+      'rustdesk',
+      'teamviewer',
+      'quicksupport',
+      'warrant',
+      'narcotics',
+      'police',
+      'cbi',
+      'arrest',
+      'bijli cut',
+      'electricity cut',
+      'sim block',
+      'bill overdue tonight',
+      'unfreeze fee',
+      'bail',
+    ]);
+
+  const isVerifiedBusinessNotification =
+    hasVerifiedBusinessAccountSignal &&
+    !hasMaliciousPayloadSignals &&
+    !hasUrgencyOrCoercionSignal &&
+    iocs.upiIds.length === 0 &&
+    iocs.bankAccounts.length === 0 &&
+    iocs.domains.length === 0;
+
+  const isVerifiedOfficialOrBusiness =
+    isVerifiedOfficialAdvisory ||
+    isVerifiedBusinessNotification ||
+    (lower.includes('[verified_official_channel]') && !hasMaliciousPayloadSignals);
+
   // Determine if a novel/paraphrased scam is detected via multi-signal convergence
   const isNovelBehavioralCoercion =
-    !isVerifiedOfficialAdvisory &&
+    !isVerifiedOfficialOrBusiness &&
     !isDigitalArrest &&
     !isVoiceCloneSos &&
     !isUpiTrap &&
@@ -871,9 +961,17 @@ export function analyzeScamPayload(
       (hasAuthorityOrImpersonationSignal && (hasFinancialOrCredentialExtractionSignal || hasAnyExtractedIoc)) ||
       hasAiSyntheticMarker);
 
-  if (isVerifiedOfficialAdvisory) {
-    score = 4;
-    triggers.push('Verified Official Government/RBI Public Awareness Channel');
+  if (isVerifiedOfficialOrBusiness) {
+    score = 3;
+    if (isVerifiedOfficialAdvisory) {
+      triggers.push('Verified Official Government/RBI Public Awareness Channel');
+    }
+    if (isVerifiedBusinessNotification) {
+      triggers.push('Verified Official Business Account / Legitimate Enterprise Channel');
+    }
+    if (triggers.length === 0) {
+      triggers.push('Verified Official Channel');
+    }
   } else if (isDigitalArrest || (isNovelBehavioralCoercion && hasAuthorityOrImpersonationSignal)) {
     score = hasAiSyntheticMarker ? 98 : 96;
     triggers.push(
@@ -1329,21 +1427,36 @@ export function analyzeScamPayload(
     threatColor: THREAT_COLORS[threatLevel],
     threatLabel: THREAT_LABELS[threatLevel],
     categoryCode: 'VERIFIED_CLEAN',
-    headlineEn: score >= 45 ? 'CAUTION: Unverified Payment Handle or Link' : 'VERIFIED SAFE: No Coercion or Phishing Signatures Found',
-    headlineHinglish: score >= 45 ? 'SAVDHAAN: Anjaan Link ya UPI ID mili hai' : 'SURAKSHIT: Koi Scam Pattern Nahi Mila',
-    headlineHi: score >= 45 ? 'सावधान: अनजान लिंक या यूपीआई आईडी मिली है' : 'सुरक्षित: कोई स्कैम पैटर्न नहीं मिला',
-    summaryEn:
-      score >= 45
-        ? 'Contains an external link or UPI handle without overt coercion keywords. Verify recipient via Family Circle before paying.'
-        : 'Message passes telemetry verification. No urgency traps, spoofed authority headers, or malicious APKs detected.',
-    summaryHinglish:
-      score >= 45
-        ? 'Is message mein external link ya UPI ID hai. Payment se pehle confirm zaroor karein.'
-        : 'Message surakshit lag raha hai. Koi khatarnaak link ya dhamki nahi mili.',
-    summaryHi:
-      score >= 45
-        ? 'इस संदेश में बाहरी लिंक या यूपीआई आईडी है। भुगतान से पहले पुष्टि करें।'
-        : 'संदेश सुरक्षित प्रतीत होता है। कोई खतरनाक लिंक या धमकी नहीं मिली।',
+    headlineEn: isVerifiedBusinessNotification
+      ? 'VERIFIED SAFE: Legitimate Verified Business Account / Official Brand Communication'
+      : score >= 45
+      ? 'CAUTION: Unverified Payment Handle or Link'
+      : 'VERIFIED SAFE: No Coercion or Phishing Signatures Found',
+    headlineHinglish: isVerifiedBusinessNotification
+      ? 'SURAKSHIT: Verified Official Business Account / Asli Brand Message'
+      : score >= 45
+      ? 'SAVDHAAN: Anjaan Link ya UPI ID mili hai'
+      : 'SURAKSHIT: Koi Scam Pattern Nahi Mila',
+    headlineHi: isVerifiedBusinessNotification
+      ? 'सुरक्षित: सत्यापित आधिकारिक बिजनेस अकाउंट / वैध ब्रांड संदेश'
+      : score >= 45
+      ? 'सावधान: अनजान लिंक या यूपीआई आईडी मिली है'
+      : 'सुरक्षित: कोई स्कैम पैटर्न नहीं मिला',
+    summaryEn: isVerifiedBusinessNotification
+      ? 'This message originates from a legitimate verified business account (e.g. Amazon, Flipkart) linking exclusively to official company domains with standard promotional/transactional options. No phishing traps, malicious APKs, or coercive demands detected.'
+      : score >= 45
+      ? 'Contains an external link or UPI handle without overt coercion keywords. Verify recipient via Family Circle before paying.'
+      : 'Message passes telemetry verification. No urgency traps, spoofed authority headers, or malicious APKs detected.',
+    summaryHinglish: isVerifiedBusinessNotification
+      ? 'Ye message verified business account ka official promotional/order update hai aur official brand website se juda hai. Isme koi scam, APK ya fake payment trap nahi hai.'
+      : score >= 45
+      ? 'Is message mein external link ya UPI ID hai. Payment se pehle confirm zaroor karein.'
+      : 'Message surakshit lag raha hai. Koi khatarnaak link ya dhamki nahi mili.',
+    summaryHi: isVerifiedBusinessNotification
+      ? 'यह संदेश एक सत्यापित बिजनेस अकाउंट से है और आधिकारिक वेबसाइट से जुड़ा है। इसमें कोई फर्जीवाड़ा या खतरनाक लिंक नहीं मिला।'
+      : score >= 45
+      ? 'इस संदेश में बाहरी लिंक या यूपीआई आईडी है। भुगतान से पहले पुष्टि करें।'
+      : 'संदेश सुरक्षित प्रतीत होता है। कोई खतरनाक लिंक या धमकी नहीं मिली।',
     pauseBeforePayRequired: false,
     pauseDurationSeconds: 0,
     triggersDetected: triggers,

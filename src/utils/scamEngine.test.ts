@@ -265,6 +265,50 @@ test('analyzeScamPayload detects International Lucky Winner bank details request
   assert.equal(res.pauseBeforePayRequired, true);
 });
 
+test('analyzeScamPayload identifies verified Amazon WhatsApp business account promotional message as Threat Level 0 VERIFIED SAFE', () => {
+  const amazonMessage = `Amazon
+Business Account
+[ Shop Now ]
+
+Amazon Great Indian Festival: Reloaded
+Festival continues with a fresh round of great deals.
+
+Price Crash Store
+https://www.amazon.in/wa_be
+
+Top 100 Deals
+https://www.amazon.in/wa_bv
+
+Blockbuster Deals
+https://www.amazon.in/wa_bw
+
+Mega Festival Deals
+https://www.amazon.in/wa_bt
+
+Deals under ₹999
+https://www.amazon.in/wa_bu
+
+10% instant discount on Axis Bank and ICICI Bank Credit Card & EMI transactions
+
+*T&C apply. Visit Amazon.in
+Reply STOP to unsubscribe
+
+[ Shop All Deals ] [verified_official_channel]`;
+
+  const res = analyzeScamPayload(amazonMessage, 'whatsapp');
+
+  assert.equal(res.threatLevel, 0);
+  assert.ok(res.riskScore <= 10, `Expected riskScore <= 10, got ${res.riskScore}`);
+  assert.equal(res.categoryCode, 'VERIFIED_CLEAN');
+  assert.equal(res.pauseBeforePayRequired, false);
+  // amazon.in links must be whitelisted and not treated as scam IOCs
+  assert.equal(res.extractedIOCs.domains.length, 0);
+  assert.ok(
+    res.triggersDetected.some((t) => t.includes('Verified Official Business Account / Legitimate Enterprise Channel'))
+  );
+});
+
+
 
 
 

@@ -106,13 +106,15 @@ async function startServer() {
       if (mediaType === 'image' && base64Data) {
         const imagePrompt = `Extract all visible text, links, and sender details from this image verbatim.
 Analyze whether this screenshot represents:
-1. LEGITIMATE_OFFICIAL: Genuine official notification, public advisory, or legitimate service (e.g. verified RBI account with rbi.org.in link, bank nomination updates, genuine non-threatening statements). If legitimate official, append [VERIFIED_OFFICIAL_CHANNEL].
-2. PHISHING_OR_SCAM: Fraudulent attempt, fake courier cancellation, fake delivery fee, digital arrest, fake police/CBI warrant, malicious APK, fake prize, or extortion. If forged seal, fake warrant, or manipulated screenshot, append [FORGED_DOCUMENT_DEEPFAKE].
+1. LEGITIMATE_OFFICIAL: Genuine official notification, public advisory, or verified business account (e.g. verified Amazon, Flipkart, Myntra, Swiggy, or Zomato WhatsApp Business account with green/blue verified badge, "Business Account", "Shop Now" button, official amazon.in / flipkart.com links, deals/discounts, "Reply STOP to unsubscribe"; verified RBI account with rbi.org.in link, bank nomination updates). If legitimate official or verified business, append [VERIFIED_OFFICIAL_CHANNEL].
+2. PHISHING_OR_SCAM: Fraudulent attempt, fake courier cancellation, fake delivery fee, digital arrest, fake police/CBI warrant, malicious APK, fake prize, lottery fraud, or extortion. If forged seal, fake warrant, or manipulated screenshot, append [FORGED_DOCUMENT_DEEPFAKE].
 3. SUSPICIOUS_UNVERIFIED: Unverified contact with suspicious links.
+
+Special rule: If this image is a screenshot of a chat that contains an incoming message followed by a security bot verdict bubble, analyze only the ORIGINAL incoming source message at the top.
 
 Output format:
 TEXT:
-<all extracted text verbatim>
+<all extracted text from the original message verbatim>
 FLAGS: <applicable tags like [VERIFIED_OFFICIAL_CHANNEL] or [FORGED_DOCUMENT_DEEPFAKE]>`;
 
         const ocrResult = await analyzeMediaWithGemini(
@@ -557,13 +559,15 @@ FLAGS: <applicable tags like [LOTTERY_PRIZE_SCAM], [SYNTHETIC_VOICE_CLONE], [VER
           if (downloaded) {
             const imagePrompt = `Extract all visible text, links, and sender details from this Telegram image verbatim.
 Analyze whether this screenshot represents:
-1. LEGITIMATE_OFFICIAL: Genuine official notification, public advisory, or legitimate service (e.g. verified RBI account with rbi.org.in link, bank nomination updates, genuine non-threatening statements). If legitimate official, append [VERIFIED_OFFICIAL_CHANNEL].
-2. PHISHING_OR_SCAM: Fraudulent attempt, fake courier cancellation, fake delivery fee, digital arrest, fake police/CBI warrant, malicious APK, fake prize, or extortion. If forged seal, fake warrant, or manipulated screenshot, append [FORGED_DOCUMENT_DEEPFAKE].
+1. LEGITIMATE_OFFICIAL: Genuine official notification, public advisory, or verified business account (e.g. verified Amazon, Flipkart, Myntra, Swiggy, or Zomato WhatsApp Business account with green/blue verified badge, "Business Account", "Shop Now" button, official amazon.in / flipkart.com links, deals/discounts, "Reply STOP to unsubscribe"; verified RBI account with rbi.org.in link, bank nomination updates). If legitimate official or verified business, append [VERIFIED_OFFICIAL_CHANNEL].
+2. PHISHING_OR_SCAM: Fraudulent attempt, fake courier cancellation, fake delivery fee, digital arrest, fake police/CBI warrant, malicious APK, fake prize, lottery fraud, or extortion. If forged seal, fake warrant, or manipulated screenshot, append [FORGED_DOCUMENT_DEEPFAKE].
 3. SUSPICIOUS_UNVERIFIED: Unverified contact with suspicious links.
+
+Special rule: If this image is a screenshot of a chat that contains an incoming message followed by a security bot verdict bubble, analyze only the ORIGINAL incoming source message at the top.
 
 Output format:
 TEXT:
-<all extracted text verbatim>
+<all extracted text from the original message verbatim>
 FLAGS: <applicable tags like [VERIFIED_OFFICIAL_CHANNEL] or [FORGED_DOCUMENT_DEEPFAKE]>`;
 
             const ocrResult = await analyzeMediaWithGemini(
