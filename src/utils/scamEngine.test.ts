@@ -188,5 +188,83 @@ test('sanitizeUntrustedEvidence and analyzeScamPayload block Base64, Unicode Tag
   assert.equal(tagRes.riskScore, 99);
 });
 
+test('analyzeScamPayload correctly identifies genuine Reserve Bank of India (RBI) public awareness message as Threat Level 0 VERIFIED SAFE', () => {
+  const rbiText = `Reserve Bank of India Business Account
+ऑनलाइन या ऑफलाइन माध्यमों से अपने नॉमिनी / यों को दर्ज / अपडेट करें
+नामांकन को अपडेट रखें
+बैंक खातों के लिए -
+आप एक साथ अधिकतम 4 नॉमिनी शामिल कर सकते हैं एवं प्रत्येक नॉमिनी का हिस्सा निर्धारित कर सकते हैं
+लॉकर के लिए क्रमिक रूप से अधिकतम 4 नॉमिनी शामिल कर सकते हैं
+कल का इंतज़ार न करें। बिना देरी किए अपना नामांकन दर्ज / अपडेट करें।
+अधिक जानकारी के लिए: https://rbikehtahai.rbi.org.in/hindi/index.html पर क्लिक करें। [verified_official_channel]`;
+
+  const res = analyzeScamPayload(rbiText, 'whatsapp');
+
+  assert.equal(res.threatLevel, 0);
+  assert.ok(res.riskScore <= 10, `Expected riskScore <= 10, got ${res.riskScore}`);
+  assert.equal(res.categoryCode, 'VERIFIED_CLEAN');
+  assert.equal(res.pauseBeforePayRequired, false);
+  // Official rbi.org.in must not be treated as a scam domain IOC
+  assert.equal(res.extractedIOCs.domains.length, 0);
+  assert.ok(
+    res.triggersDetected.some((t) => t.includes('Verified Official Government/RBI Public Awareness Channel'))
+  );
+});
+
+test('analyzeScamPayload detects Fake Courier / Order Delivery Cancellation phishing trap and flags as Threat Level 4', () => {
+  const fakeDeliveryText = `Jio Home Delivery Cancellation Request
+Dear customer, we received a cancellation request for your order JIO-88219.
+If you did not make this cancellation request, tap below immediately:
+[Cancel Delivery] [I Want Delivery]
+Redelivery fee of ₹25 pending. Confirm immediately at https://jio-delivery-support.xyz/track`;
+
+  const res = analyzeScamPayload(fakeDeliveryText, 'sms');
+
+  assert.equal(res.threatLevel, 4);
+  assert.ok(res.riskScore >= 80, `Expected riskScore >= 80, got ${res.riskScore}`);
+  assert.equal(res.categoryCode, 'FAKE_DELIVERY_TRAP');
+  assert.equal(res.pauseBeforePayRequired, true);
+  assert.ok(res.extractedIOCs.domains.some((d) => d.includes('jio-delivery-support.xyz')));
+});
+
+test('analyzeScamPayload detects International Lottery / Cash Prize and Bank Detail Harvesting in English audio', () => {
+  const englishAudio =
+    'Congratulations, you have won five hundred million in international lottery reply with your details now to claim your prize before it expires.';
+  const res = analyzeScamPayload(englishAudio, 'voice');
+
+  assert.equal(res.threatLevel, 4);
+  assert.equal(res.riskScore, 92);
+  assert.equal(res.categoryCode, 'LOTTERY_PRIZE_SCAM');
+  assert.equal(res.pauseBeforePayRequired, true);
+  assert.ok(
+    res.triggersDetected.some((t) => t.includes('Fake International Lottery / Cash Prize Winner Bait'))
+  );
+});
+
+test('analyzeScamPayload detects Hindi Prize Winner / Account Details Extraction in Hindi audio', () => {
+  const hindiAudio = 'आपने ₹5,000 जीता है, जीत पाने के लिए अपना अकाउंट डिटेल्स सेंड करें।';
+  const res = analyzeScamPayload(hindiAudio, 'voice');
+
+  assert.equal(res.threatLevel, 4);
+  assert.equal(res.riskScore, 92);
+  assert.equal(res.categoryCode, 'LOTTERY_PRIZE_SCAM');
+  assert.equal(res.pauseBeforePayRequired, true);
+  assert.ok(
+    res.triggersDetected.some((t) => t.includes('Bank Account / Personal Credential Extraction Demand'))
+  );
+});
+
+test('analyzeScamPayload detects International Lucky Winner bank details request with expiry urgency', () => {
+  const luckyWinnerAudio =
+    'Dear customer, you have been selected as the lucky winner of our international lottery. You have won $500,000. Please contact us and send your bank details immediately to claim the prize before it expires. Thank you.';
+  const res = analyzeScamPayload(luckyWinnerAudio, 'voice');
+
+  assert.equal(res.threatLevel, 4);
+  assert.equal(res.riskScore, 92);
+  assert.equal(res.categoryCode, 'LOTTERY_PRIZE_SCAM');
+  assert.equal(res.pauseBeforePayRequired, true);
+});
+
+
 
 

@@ -34,6 +34,8 @@ export interface ScamAnalysisResult {
     | 'UPI_COLLECT_TRAP'
     | 'STOCK_VIP_PUMP'
     | 'FAKE_KYC_UTILITY'
+    | 'FAKE_DELIVERY_TRAP'
+    | 'LOTTERY_PRIZE_SCAM'
     | 'VOICE_CLONE_SOS'
     | 'VERIFIED_CLEAN';
   headlineEn: string;
@@ -254,13 +256,44 @@ export function extractIOCsFromText(text: string): ExtractedIOCs {
   const bankAccounts = Array.from(
     new Set((combined.match(acctRegex) || []).filter((a) => !phoneNumbers.includes(a.slice(-10))))
   );
-  const domains = Array.from(
+  const rawDomains = Array.from(
     new Set(
       (combined.match(urlRegex) || []).filter(
         (d) => !rawUpi.some((u) => d.includes(u))
       )
     )
   );
+
+  const LEGIT_OFFICIAL_ROOTS = [
+    'rbi.org.in',
+    'gov.in',
+    'nic.in',
+    'incometax.gov.in',
+    'cybercrime.gov.in',
+    'sbi.co.in',
+    'hdfcbank.com',
+    'icicibank.com',
+    'axisbank.com',
+    'punjabnationalbank.in',
+    'bankofbaroda.in',
+    'canarabank.com',
+    'indiapost.gov.in',
+    'ceir.gov.in',
+    'sancharsaathi.gov.in',
+  ];
+
+  const isLegitDomain = (url: string) => {
+    try {
+      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+      const host = parsed.hostname.toLowerCase();
+      return LEGIT_OFFICIAL_ROOTS.some((root) => host === root || host.endsWith(`.${root}`));
+    } catch {
+      return false;
+    }
+  };
+
+  // Only treat external domains as untrusted IOCs if they are NOT verified official government/bank domains
+  const domains = rawDomains.filter((d) => !isLegitDomain(d));
 
   const lower = combined.toLowerCase();
   let impersonatedEntity = 'None Detected';
@@ -558,6 +591,129 @@ export function analyzeScamPayload(
     'टेलीग्राम टास्क',
   ]);
 
+  // 5b. Fake Courier / Delivery Cancellation Trap / E-Commerce Phishing
+  const isFakeDeliveryTrap = matchesAny(lower, [
+    'cancellation request',
+    'cancel delivery',
+    'i want delivery',
+    'delivery cancellation',
+    'order cancellation',
+    'jio home delivery',
+    'jio order',
+    'parcel on hold',
+    'delivery failed',
+    'address incomplete',
+    'package pending',
+    'update delivery address',
+    'reschedule delivery',
+    'pay re-delivery',
+    'redelivery fee',
+    'delivery boy number',
+    'courier boy',
+    'indiapost parcel',
+    'india post speed post',
+    'speedpost hold',
+    'पार्सल डिलीवरी',
+    'ऑर्डर कैंसिल',
+  ]);
+
+  // 5c. Fake Lottery / Lucky Draw / Prize Reward Phishing & Bank Detail Harvesting
+  const hasLotteryOrPrizeSignal = matchesAny(lower, [
+    'lottery',
+    'international lottery',
+    'lucky winner',
+    'lucky draw',
+    'you have won',
+    'you\'ve won',
+    'have won',
+    'won $',
+    'won £',
+    'won €',
+    'won inr',
+    'won rs',
+    'won ₹',
+    'won five hundred',
+    'won 500',
+    'claim your prize',
+    'claim the prize',
+    'claim your reward',
+    'claim prize',
+    'claim reward',
+    'cash prize',
+    'prize money',
+    'selected as the lucky',
+    'congratulations you have won',
+    'congratulations, you have won',
+    'mega jackpot',
+    'kbc lottery',
+    'kaun banega crorepati',
+    'जीता है',
+    'जीत पाने के लिए',
+    'रुपए जीता',
+    'रुपये जीता',
+    'रुपया जीता',
+    'लॉटरी',
+    'लकी ड्रा',
+    'लकी ड्रॉ',
+    'इनाम जीता',
+    'इनाम मिला',
+    'इनाम पाने के लिए',
+    'पुरस्कार जीता',
+    'जैकपॉट',
+    'केबीसी लॉटरी',
+    'लकी विनर',
+    'jeeta hai',
+    'jeetne par',
+    'inaam mila',
+    'inaam jeeta',
+    'lottery lagi',
+    'lucky draw winner',
+    'prize claim',
+    '[lottery_prize_scam]',
+  ]);
+
+  const hasDetailOrAdvanceDemandSignal = matchesAny(lower, [
+    'send your bank details',
+    'send bank details',
+    'bank details',
+    'account details',
+    'reply with your details',
+    'send your details',
+    'send details',
+    'share details',
+    'account number',
+    'bank account',
+    'contact us and send',
+    'claim before it expires',
+    'before it expires',
+    'processing fee',
+    'conversion fee',
+    'clearance fee',
+    'अकाउंट डिटेल्स सेंड करें',
+    'अकाउंट डिटेल्स भेजें',
+    'बैंक डिटेल्स भेजें',
+    'बैंक डिटेल्स',
+    'खाता विवरण',
+    'अकाउंट डिटेल्स',
+    'बैंक खाता',
+    'डिटेल्स सेंड करें',
+    'details send karein',
+    'account details bhejo',
+    'bank details bhejo',
+  ]);
+
+  const isLotteryPrizeTrap =
+    hasLotteryOrPrizeSignal &&
+    (hasDetailOrAdvanceDemandSignal ||
+      lower.includes('reply with') ||
+      lower.includes('contact us') ||
+      lower.includes('expires') ||
+      lower.includes('सेंड करें') ||
+      lower.includes('भेजें') ||
+      lower.includes('send') ||
+      lower.includes('[lottery_prize_scam]'));
+
+
   // 6. Multi-Signal Behavioral & Semantic Matrix (Catches Novel, Paraphrased & AI-Generated Scams)
   const hasAuthorityOrImpersonationSignal = matchesAny(lower, [
     'officer',
@@ -603,6 +759,11 @@ export function analyzeScamPayload(
     'blocked',
     'suspended',
     'terminated',
+    'cancelled',
+    'cancellation',
+    'failed',
+    'on hold',
+    'pending delivery',
     'arrest',
     'jail',
     'prison',
@@ -676,19 +837,44 @@ export function analyzeScamPayload(
     (hasAnyExtractedIoc ? 1 : 0) +
     (hasAiSyntheticMarker ? 2 : 0);
 
+  // Check for verified official institutional advisory signals (e.g. RBI nomination advice with official rbi.org.in link)
+  const isVerifiedOfficialAdvisory =
+    matchesAny(lower, [
+      'rbikehtahai',
+      'rbi.org.in',
+      'cybercrime.gov.in',
+      'sancharsaathi.gov.in',
+      'nomination',
+      'नॉमिनी',
+      'नामांकन',
+      'rbi awareness',
+      'public awareness',
+      '[verified_official_channel]',
+    ]) &&
+    !hasUrgencyOrCoercionSignal &&
+    !hasFinancialOrCredentialExtractionSignal &&
+    iocs.upiIds.length === 0 &&
+    iocs.bankAccounts.length === 0;
+
   // Determine if a novel/paraphrased scam is detected via multi-signal convergence
   const isNovelBehavioralCoercion =
+    !isVerifiedOfficialAdvisory &&
     !isDigitalArrest &&
     !isVoiceCloneSos &&
     !isUpiTrap &&
     !isKycUtility &&
     !isStockPump &&
+    !isFakeDeliveryTrap &&
+    !isLotteryPrizeTrap &&
     (behavioralSignalCount >= 3 ||
       (hasUrgencyOrCoercionSignal && hasFinancialOrCredentialExtractionSignal) ||
       (hasAuthorityOrImpersonationSignal && (hasFinancialOrCredentialExtractionSignal || hasAnyExtractedIoc)) ||
       hasAiSyntheticMarker);
 
-  if (isDigitalArrest || (isNovelBehavioralCoercion && hasAuthorityOrImpersonationSignal)) {
+  if (isVerifiedOfficialAdvisory) {
+    score = 4;
+    triggers.push('Verified Official Government/RBI Public Awareness Channel');
+  } else if (isDigitalArrest || (isNovelBehavioralCoercion && hasAuthorityOrImpersonationSignal)) {
     score = hasAiSyntheticMarker ? 98 : 96;
     triggers.push(
       'Authority Impersonation (Police/CBI/Customs/Judiciary)',
@@ -704,6 +890,20 @@ export function analyzeScamPayload(
       'AI Voice Clone / Relative-in-Distress Emergency Script',
       'Sudden Phone/Number Change Claim ("Calling from friend/police phone")',
       'Urgent Third-Party UPI / Bail / Hospital Deposit Demand'
+    );
+  } else if (isLotteryPrizeTrap) {
+    score = 92;
+    triggers.push(
+      'Fake International Lottery / Cash Prize Winner Bait',
+      'Bank Account / Personal Credential Extraction Demand',
+      'Urgency Expiry Pressure ("Claim before it expires")'
+    );
+  } else if (isFakeDeliveryTrap) {
+    score = 87;
+    triggers.push(
+      'Fake Courier / Delivery Cancellation Phishing Trap',
+      'Urgency Button/Link Prompt ("Cancel Delivery" / "I Want Delivery")',
+      'Spoofed Brand Name / WhatsApp Business Account Impersonation'
     );
   } else if (isUpiTrap) {
     score = 89;
@@ -952,6 +1152,100 @@ export function analyzeScamPayload(
           probabilityPct: 92,
           timeWindow: 'Next 1–3 mins',
           counterMeasure: 'Decline Collect Request and report VPA handle to Scam Radar.',
+        },
+      ],
+    };
+  }
+
+  if (isLotteryPrizeTrap) {
+    return {
+      id: `INT-${Math.abs(hashCode(text)).toString(16).slice(0, 6).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      channel,
+      riskScore: score,
+      threatLevel,
+      meterBlocks,
+      threatColor: THREAT_COLORS[threatLevel],
+      threatLabel: THREAT_LABELS[threatLevel],
+      categoryCode: 'LOTTERY_PRIZE_SCAM',
+      headlineEn: 'CRITICAL: Fake Lottery / Prize Winner Phishing Scam Detected',
+      headlineHinglish: 'KHATRA: Fake Lottery / Lucky Draw Inaam Scam Pakda Gaya!',
+      headlineHi: 'गंभीर चेतावनी: फर्जी लॉटरी / लकी ड्रॉ इनाम धोखाधड़ी की पहचान हुई!',
+      summaryEn:
+        'Scammers use fabricated lottery wins or lucky draw prizes to harvest your bank account details or demand an advance "clearance/processing fee" before disappearing. Real lotteries never ask for upfront payments or unverified bank details.',
+      summaryHinglish:
+        'Scammers nakli lottery ya lucky draw ka lalach dekar aapke bank account ki details churaate hain ya "clearance fee" maangte hain. Kisi ko bhi account details na bhejein!',
+      summaryHi:
+        'स्कैमर्स फर्जी लॉटरी या लकी ड्रॉ का लालच देकर आपके बैंक खाते का विवरण चुराते हैं या प्रोसेसिंग फीस मांगते हैं। किसी को भी बैंक विवरण न भेजें।',
+      pauseBeforePayRequired: true,
+      pauseDurationSeconds: 120,
+      triggersDetected: triggers,
+      extractedIOCs: iocs,
+      nextMoves: [
+        {
+          stepNumber: 1,
+          actorMove: 'Demand your bank account number, IFSC code, and Aadhaar card under the pretext of depositing prize winnings.',
+          actorMoveHinglish: 'Inaam transfer karne ke bahane aapka bank account number, IFSC code aur Aadhaar card maangenge.',
+          actorMoveHi: 'इनाम ट्रांसफर करने के बहाने आपका बैंक खाता नंबर, आईएफएससी कोड और आधार कार्ड मांगेंगे।',
+          probabilityPct: 97,
+          timeWindow: 'Immediate',
+          counterMeasure: 'NEVER share bank account details, card numbers, or OTP for unsolicited lottery or prize notifications.',
+        },
+        {
+          stepNumber: 2,
+          actorMove: 'Demand an upfront "TDS Tax", "RBI Currency Conversion Fee", or "Processing Charge" of ₹2,500–₹25,000 before releasing funds.',
+          actorMoveHinglish: 'Lottery release karne ke liye pehle "Processing Fee" ya "RBI Tax" ke naam par paise maangenge.',
+          actorMoveHi: 'लॉटरी जारी करने के लिए पहले प्रोसेसिंग फीस या टैक्स के नाम पर पैसे मांगेंगे।',
+          probabilityPct: 94,
+          timeWindow: 'Next 5–15 mins',
+          counterMeasure: 'Block caller immediately and file a complaint on 1930 / cybercrime.gov.in.',
+        },
+      ],
+    };
+  }
+
+  if (isFakeDeliveryTrap) {
+    return {
+      id: `INT-${Math.abs(hashCode(text)).toString(16).slice(0, 6).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      channel,
+      riskScore: score,
+      threatLevel,
+      meterBlocks,
+      threatColor: THREAT_COLORS[threatLevel],
+      threatLabel: THREAT_LABELS[threatLevel],
+      categoryCode: 'FAKE_DELIVERY_TRAP',
+      headlineEn: 'CRITICAL: Fake Courier / Order Cancellation Phishing Trap Detected',
+      headlineHinglish: 'KHATRA: Fake Jio/Courier Delivery Cancellation Scam Pakda Gaya!',
+      headlineHi: 'गंभीर चेतावनी: फर्जी कूरियर / डिलीवरी कैंसलेशन फिशिंग ट्रैप की पहचान हुई!',
+      summaryEn:
+        'Scammers use fake delivery cancellation alerts ("Jio Home Delivery", "IndiaPost", "FedEx") with urgent action buttons to bait victims into paying a ₹5–₹25 "reschedule fee" or installing an APK that drains their bank account.',
+      summaryHinglish:
+        'Scammers nakli delivery cancellation message bhej kar aapko link par click karne ya ₹10-₹25 fee bharne ko bolte hain, jisse bank account khali ho jata hai. Kisi bhi button par click na karein!',
+      summaryHi:
+        'स्कैमर्स फर्जी डिलीवरी कैंसलेशन संदेश भेजकर लिंक पर क्लिक करने या टोकन फीस भरने का दबाव बनाते हैं। किसी भी बटन या लिंक पर क्लिक न करें।',
+      pauseBeforePayRequired: true,
+      pauseDurationSeconds: 120,
+      triggersDetected: triggers,
+      extractedIOCs: iocs,
+      nextMoves: [
+        {
+          stepNumber: 1,
+          actorMove: 'Offer "I Want Delivery" or "Cancel Delivery" interactive options to capture your mobile response.',
+          actorMoveHinglish: 'Aapko "I Want Delivery" ya "Cancel" option dikha kar response lenge.',
+          actorMoveHi: 'आपको डिलीवरी जारी रखने या रद्द करने का विकल्प दिखाकर प्रतिक्रिया लेंगे।',
+          probabilityPct: 96,
+          timeWindow: 'Immediate',
+          counterMeasure: 'Do not click buttons. Verify order directly inside official MyJio or e-commerce app.',
+        },
+        {
+          stepNumber: 2,
+          actorMove: 'Send a malicious payment link or APK download claiming a ₹5–₹25 redelivery charge or ask you to call a fake delivery executive number.',
+          actorMoveHinglish: '₹5-₹25 re-delivery charge ke naam par phishing link bhejenge ya fake delivery boy number denge.',
+          actorMoveHi: 'पुनः डिलीवरी के नाम पर छोटा भुगतान मांगने वाला लिंक या फर्जी नंबर भेजेंगे।',
+          probabilityPct: 93,
+          timeWindow: 'Next 2–5 mins',
+          counterMeasure: 'Never enter UPI PIN or card CVV for delivery redelivery charges.',
         },
       ],
     };

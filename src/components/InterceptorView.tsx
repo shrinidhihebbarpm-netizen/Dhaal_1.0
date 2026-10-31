@@ -158,11 +158,11 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
       type: msg.mediaType,
       fileName: `telegram_${msg.mediaType}_${msg.messageId}`,
       fileSizeKb: Math.max(4, Math.round(msg.extractedText.length / 18)),
-      extractionSource: `${msg.extractionSource} · Chat ID ${msg.chatId}`,
+      extractionSource: msg.extractionSource,
     });
     syncResultToRadar(
       msg.analysis,
-      `Telegram ${msg.mediaType.toUpperCase()} (${msg.chatTitle})`
+      `Telegram ${msg.mediaType.toUpperCase()} (Attached Media)`
     );
     if (msg.analysis.pauseBeforePayRequired) {
       setPauseSecondsLeft(120);
@@ -205,7 +205,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
           const latest = data.newlyImported[0] as TelegramImportedMessage;
           applyTelegramMessageToInterceptor(latest);
           setTelegramNotice(
-            `Imported ${data.newlyImported.length} message(s) from Telegram (${latest.chatTitle} · ID ${latest.chatId}).`
+            `Imported ${data.newlyImported.length} message(s) from Telegram.`
           );
         } else if (!silentBackground) {
           if (data.notice) {
@@ -989,28 +989,38 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 text-[10px]">
-                      <span className="font-bold text-[#1a1a1a] dark:text-[#f2f0eb] truncate">
-                        {msg.chatTitle} · {msg.mediaType.toUpperCase()} · {msg.receivedAt}
+                      <span className="font-bold text-[#1a1a1a] dark:text-[#f2f0eb] flex items-center gap-1.5 truncate">
+                        <span>
+                          {msg.mediaType === 'audio'
+                            ? '🎙️ Attached Voice Note / Audio File'
+                            : msg.mediaType === 'image'
+                            ? '🖼️ Attached Image Screenshot'
+                            : '💬 Attached Message Text'}
+                        </span>
+                        <span className="text-[#6b6b6b] dark:text-[#9ca3af] shrink-0">· {msg.receivedAt}</span>
                       </span>
                       <span
-                        className="font-bold shrink-0"
-                        style={{ color: msg.analysis.threatColor }}
+                        className="font-bold px-1.5 py-0.5 rounded text-[10px] shrink-0"
+                        style={{
+                          backgroundColor: `${msg.analysis.threatColor}15`,
+                          color: msg.analysis.threatColor,
+                          border: `1px solid ${msg.analysis.threatColor}40`,
+                        }}
                       >
-                        RISK {msg.analysis.riskScore}/100
+                        {msg.analysis.threatLabel} ({msg.analysis.riskScore}/100)
                       </span>
                     </div>
-                    <div className="text-[10px] truncate">
-                      From: {msg.senderName}
-                      {msg.forwardedFrom ? ` · Fwd: ${msg.forwardedFrom}` : ''} · Chat ID: {msg.chatId}
-                    </div>
-                    <div className="text-[11px] text-[#1a1a1a] dark:text-[#f2f0eb] truncate">
+                    <div className="text-[11px] font-mono text-[#1a1a1a] dark:text-[#f2f0eb] line-clamp-2 bg-black/[0.03] dark:bg-white/[0.03] p-1.5 rounded border border-[#eae8e1] dark:border-[#262b36]">
                       {msg.extractedText}
                     </div>
-                    {msg.botReplyText && (
-                      <div className="text-[10px] text-[#2e7d32] dark:text-[#4ade80] truncate pt-0.5 border-t border-[#eae8e1] dark:border-[#262b36]">
-                        ✓ Bot Auto-Reply Dispatched: {msg.analysis.threatLabel} ({msg.analysis.riskScore}/100)
-                      </div>
-                    )}
+                    <div className="text-[10px] text-[#2e7d32] dark:text-[#4ade80] flex items-center justify-between gap-2 pt-0.5 border-t border-[#eae8e1] dark:border-[#262b36]">
+                      <span className="truncate font-semibold">
+                        🛡️ Verdict: {msg.analysis.headlineEn}
+                      </span>
+                      <span className="shrink-0 text-[9px] uppercase tracking-wider text-[#6b6b6b] dark:text-[#9ca3af]">
+                        Verified Safe Privacy
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
