@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
+import { config, resolveEncryptionKeyHex } from '../config';
 import {
   ComplaintDraft,
   ScamAnalysisResult,
@@ -13,13 +14,82 @@ import {
   ScamGraphNode,
   INITIAL_COMPLAINT_DRAFT,
   INITIAL_SCAM_GRAPH,
+  inferGraphNodeType,
 } from './seedData';
+
+// ============================================================================
+// C-02 & H-05 — AES-256-GCM Encryption at Rest
+// ============================================================================
+function getEncryptionKeyBuffer(): Buffer {
+  const keyHex = resolveEncryptionKeyHex();
+  const buf = Buffer.from(keyHex, 'hex');
+  if (buf.length !== 32) {
+    throw new Error('DATA_ENCRYPTION_KEY must be 32 bytes (64 hex chars)');
+  }
+  return buf;
+}
+
+export function encrypt(plaintext: string): string {
+  const key = getEncryptionKeyBuffer();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${ciphertext.toString('hex')}:${authTag.toString('hex')}`;
+}
+
+export function decrypt(ciphertext: string): string {
+  const parts = ciphertext.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid ciphertext format');
+  }
+  const [ivHex, ctHex, tagHex] = parts;
+  if (!ivHex || !tagHex || ivHex.length !== 24 || tagHex.length !== 32) {
+    throw new Error('Invalid ciphertext format');
+  }
+  const key = getEncryptionKeyBuffer();
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(ivHex, 'hex')
+  );
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(ctHex || '', 'hex')),
+    decipher.final(),
+  ]).toString('utf8');
+}
+
+export function isEncryptedValue(value: string): boolean {
+  return /^[0-9a-fA-F]{24}:[0-9a-fA-F]*:[0-9a-fA-F]{32}$/.test(value);
+}
+
+export function encryptIfNeeded(value: string): string {
+  if (!value || !value.trim()) return '';
+  if (isEncryptedValue(value)) return value;
+  return encrypt(value);
+}
+
+export function decryptIfNeeded(value: string): string {
+  if (!value || !value.trim()) return '';
+  if (!isEncryptedValue(value)) return value;
+  try {
+    return decrypt(value);
+  } catch {
+    return '';
+  }
+}
 
 export interface PersistedSettings {
   duressWord: string;
   duressWordConfigured: boolean;
   dailyCode: string;
   familyTelegramChatId: string;
+  telegramBotToken?: string;
+  updatedAt?: string;
   lastTelegramUpdateId: number;
   lastUpdateId?: number;
   repliedUpdateIds: number[];
@@ -27,12 +97,11 @@ export interface PersistedSettings {
   repliedMediaGroupIds: string[];
 }
 
-
 export interface PublicSettingsView {
   duressWordSet: boolean;
   duressWordConfigured: boolean;
-  dailyCode: string;
-  familyTelegramChatId: string;
+  dailyCodeConfigured: boolean;
+  familyTelegramConfigured: boolean;
 }
 
 export interface PersistedComplaintDrafts {
@@ -84,7 +153,12 @@ export interface PersistedTelegramMessage {
 const fileWriteLocks = new Map<string, Promise<void>>();
 
 export function getDataDir(customDir?: string): string {
-  return customDir || process.env.DHAAL_DATA_DIR || path.join(os.tmpdir(), 'dhaal-data');
+  return (
+    customDir ||
+    process.env.DHAAL_DATA_DIR ||
+    config.persistence.dataDir ||
+    path.join(os.tmpdir(), 'dhaal-data')
+  );
 }
 
 export const DATA_DIR = getDataDir();
@@ -94,7 +168,6 @@ export const FAMILY_MEMBERS_FILE = path.join(DATA_DIR, 'familyMembers.json');
 export const COMPLAINT_DRAFTS_FILE = path.join(DATA_DIR, 'complaintDrafts.json');
 export const UNFREEZE_CASES_FILE = path.join(DATA_DIR, 'unfreezeCases.json');
 export const TELEGRAM_MESSAGES_FILE = path.join(DATA_DIR, 'telegramMessages.json');
-
 
 export async function withFileLock<T>(
   filePath: string,
@@ -107,7 +180,10 @@ export async function withFileLock<T>(
   });
   fileWriteLocks.set(
     filePath,
-    prevLock.then(() => nextLock, () => nextLock)
+    prevLock.then(
+      () => nextLock,
+      () => nextLock
+    )
   );
 
   await prevLock;
@@ -118,6 +194,7 @@ export async function withFileLock<T>(
   }
 }
 
+// L-05: 64-bit random entropy (8 bytes) on temp filenames
 export async function atomicWriteJson<T>(
   filePath: string,
   data: T
@@ -125,7 +202,7 @@ export async function atomicWriteJson<T>(
   const dir = path.dirname(filePath);
   await fs.promises.mkdir(dir, { recursive: true });
   const tmpFile = `${filePath}.${process.pid}.${Date.now()}.${crypto
-    .randomBytes(4)
+    .randomBytes(8)
     .toString('hex')}.tmp`;
   const serialized = JSON.stringify(data, null, 2);
   await fs.promises.writeFile(tmpFile, serialized, 'utf8');
@@ -157,19 +234,20 @@ export async function updateJsonFileAtomically<T>(
   });
 }
 
+// H-09: 256-bit cryptographic entropy (43 chars base64url)
 export function generateRandomServerDuressWord(): string {
-  const prefixes = ['KAVACH', 'SURAKSHA', 'DRISHTI', 'SANKALP', 'VAJRA'];
-  const prefix = prefixes[crypto.randomInt(0, prefixes.length)];
-  const suffix = crypto.randomBytes(3).toString('hex').toUpperCase();
-  return `${prefix}-${suffix}`;
+  return crypto.randomBytes(32).toString('base64url');
 }
 
 export function getDefaultSettings(): PersistedSettings {
   return {
-    duressWord: generateRandomServerDuressWord(),
+    duressWord: encryptIfNeeded(generateRandomServerDuressWord()),
     duressWordConfigured: false,
     dailyCode: 'KAVACH-749',
     familyTelegramChatId: '',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN
+      ? encryptIfNeeded(process.env.TELEGRAM_BOT_TOKEN.trim())
+      : '',
     lastTelegramUpdateId: 0,
     repliedUpdateIds: [],
     repliedMessageKeys: [],
@@ -187,7 +265,8 @@ export function getDefaultUnfreezeCases(): PersistedUnfreezeCase[] {
       totalBalanceInr: 245000,
       disputedTransactionInr: 4500,
       freezeType: 'FULL_DEBIT_FREEZE',
-      policeNoticeStation: 'Cyber Crime Police Station Ahmedabad (Layer-3 Notice)',
+      policeNoticeStation:
+        'Cyber Crime Police Station Ahmedabad (Layer-3 Notice)',
       ackNumber1930: '30811260049182',
     },
   ];
@@ -223,7 +302,10 @@ export async function initPersistenceStore(customDir?: string): Promise<{
     { name: 'complaintDrafts.json', defaultVal: getDefaultComplaintDrafts() },
     { name: 'unfreezeCases.json', defaultVal: getDefaultUnfreezeCases() },
     { name: 'scamReports.json', defaultVal: getDefaultScamReports() },
-    { name: 'telegramMessages.json', defaultVal: [] as PersistedTelegramMessage[] },
+    {
+      name: 'telegramMessages.json',
+      defaultVal: [] as PersistedTelegramMessage[],
+    },
   ];
 
   for (const item of filesToEnsure) {
@@ -240,15 +322,23 @@ export async function initPersistenceStore(customDir?: string): Promise<{
   return { backend: 'local-atomic', dataDir };
 }
 
-export function toPublicSettings(settings: PersistedSettings): PublicSettingsView {
+// C-02, M-02, M-03: Never expose plaintext secrets in public settings
+export function toPublicSettings(
+  settings: PersistedSettings
+): PublicSettingsView {
   return {
     duressWordSet: Boolean(settings.duressWord && settings.duressWord.trim()),
     duressWordConfigured: Boolean(settings.duressWordConfigured),
-    dailyCode: settings.dailyCode || 'KAVACH-749',
-    familyTelegramChatId: settings.familyTelegramChatId || '',
+    dailyCodeConfigured: Boolean(
+      settings.dailyCode && settings.dailyCode.trim()
+    ),
+    familyTelegramConfigured: Boolean(
+      settings.familyTelegramChatId && settings.familyTelegramChatId.trim()
+    ),
   };
 }
 
+// H-06, M-02, M-03, M-17: Redact secrets, PII, and unverified AI fields in export
 export async function buildRedactedExportBundle(customDir?: string) {
   const dataDir = getDataDir(customDir);
   const [
@@ -282,9 +372,22 @@ export async function buildRedactedExportBundle(customDir?: string) {
     ),
   ]);
 
-  // Explicitly redact duressWord so it never leaks in plaintext
-  const { duressWord: _redacted, ...safeSettingsRest } = rawSettings;
-  void _redacted;
+  const {
+    duressWord: _redactedDuress,
+    dailyCode: _redactedDailyCode,
+    familyTelegramChatId: _redactedChatId,
+    telegramBotToken: _redactedBotToken,
+    ...safeSettingsRest
+  } = rawSettings;
+  void _redactedDuress;
+  void _redactedDailyCode;
+  void _redactedChatId;
+  void _redactedBotToken;
+
+  const currentDraft = complaintDrafts?.current || INITIAL_COMPLAINT_DRAFT;
+  const historyDrafts = Array.isArray(complaintDrafts?.history)
+    ? complaintDrafts.history
+    : [INITIAL_COMPLAINT_DRAFT];
 
   return {
     exportedAt: new Date().toISOString(),
@@ -292,43 +395,64 @@ export async function buildRedactedExportBundle(customDir?: string) {
     familyMembers,
     settings: {
       ...safeSettingsRest,
-      duressWordSet: Boolean(rawSettings.duressWord && rawSettings.duressWord.trim()),
+      duressWordSet: Boolean(
+        rawSettings.duressWord && rawSettings.duressWord.trim()
+      ),
+      dailyCodeConfigured: Boolean(
+        rawSettings.dailyCode && rawSettings.dailyCode.trim()
+      ),
+      familyTelegramConfigured: Boolean(
+        rawSettings.familyTelegramChatId &&
+          rawSettings.familyTelegramChatId.trim()
+      ),
     },
-    complaintDrafts,
+    complaintDrafts: {
+      ...complaintDrafts,
+      current: {
+        ...currentDraft,
+        fields: (currentDraft.fields || []).map((f) => ({
+          ...f,
+          value: f.verifiedByUser
+            ? f.value
+            : '[UNVERIFIED AI DRAFT — REDACTED]',
+        })),
+      },
+      history: historyDrafts.map((d) => ({
+        ...d,
+        fields: (d.fields || []).map((f) => ({
+          ...f,
+          value: f.verifiedByUser
+            ? f.value
+            : '[UNVERIFIED AI DRAFT — REDACTED]',
+        })),
+      })),
+    },
     unfreezeCases,
     scamReports,
-    telegramMessages: telegramMessages.slice(0, 200),
+    telegramMessages: telegramMessages.slice(0, 200).map((m) => ({
+      id: m.id,
+      updateId: m.updateId,
+      messageId: m.messageId,
+      chatId: '[REDACTED]',
+      chatTitle: '[REDACTED]',
+      chatType: m.chatType,
+      senderName: '[REDACTED]',
+      forwardedFrom: '[REDACTED]',
+      mediaType: m.mediaType,
+      extractedText: m.extractedText,
+      extractionSource: m.extractionSource,
+      receivedAt: m.receivedAt,
+      analysis: m.analysis,
+      botReplyText: m.botReplyText,
+      repliedInTelegram: m.repliedInTelegram,
+    })),
   };
 }
 
 // ============================================================================
-// Fix #5 — Idempotent Scam Graph Clustering Logic (shared between Client & Server)
+// Fix #5 & L-06 — DRY Idempotent Scam Graph Clustering Logic
 // ============================================================================
-export function inferGraphNodeType(label: string): ScamGraphNode['type'] {
-  const lower = label.toLowerCase();
-  if (lower.includes('@')) return 'MULE_UPI';
-  if (/^\+?\d[\d\s-]{6,}$/.test(label.trim())) return 'SPOOF_PHONE';
-  if (
-    lower.includes('http') ||
-    lower.includes('.com') ||
-    lower.includes('.in') ||
-    lower.includes('.apk') ||
-    lower.includes('tg://')
-  ) {
-    return 'PHISH_DOMAIN';
-  }
-  if (
-    lower.includes('hdfc') ||
-    lower.includes('sbi') ||
-    lower.includes('icici') ||
-    lower.includes('axis') ||
-    lower.includes('a/c') ||
-    /\b\d{9,18}\b/.test(lower)
-  ) {
-    return 'BANK_AC';
-  }
-  return 'CAMPAIGN_CLUSTER';
-}
+export { inferGraphNodeType };
 
 export function upsertNodesWithConnectionsInMemory(
   existingNodes: ScamGraphNode[],
@@ -336,7 +460,6 @@ export function upsertNodesWithConnectionsInMemory(
   connectedLabels: string[],
   existingParentId?: string
 ): ScamGraphNode[] {
-  // Always ensure baseline INITIAL_SCAM_GRAPH nodes are present before merging
   const baseMap = new Map<string, ScamGraphNode>();
   for (const seedNode of INITIAL_SCAM_GRAPH) {
     baseMap.set(seedNode.label.toLowerCase(), {
@@ -365,7 +488,7 @@ export function upsertNodesWithConnectionsInMemory(
       { x: 115, y: 180 },
       { x: 805, y: 180 },
     ];
-    return presetSlots[(idx - 1) % presetSlots.length];
+    return presetSlots[(idx - 1) % presetSlots.length]!;
   };
 
   const upsertNode = (
@@ -445,7 +568,6 @@ export async function recordAnalysisToScamReports(
     ...analysis.extractedIOCs.domains,
   ];
 
-  // If safe/clean and no IOCs, return existing reports without polluting graph
   if (
     analysis.categoryCode === 'VERIFIED_CLEAN' &&
     analysis.threatLevel === 0 &&
@@ -465,7 +587,8 @@ export async function recordAnalysisToScamReports(
       : `User Scan: ${analysis.categoryCode}`;
 
   if (connectedEntities.length === 0 && analysis.triggersDetected.length > 0) {
-    connectedEntities.push(analysis.triggersDetected[0]);
+    const firstTrigger = analysis.triggersDetected[0];
+    if (firstTrigger) connectedEntities.push(firstTrigger);
   }
 
   return updateJsonFileAtomically<PersistedScamReports>(
@@ -490,43 +613,76 @@ export async function recordAnalysisToScamReports(
 }
 
 // ============================================================================
-// Fix #8 — Token-Bucket Rate Limiter Behind Cloud Run Proxy (X-Forwarded-For)
+// H-01 & H-02 — Proxy-Aware Per-Endpoint Token-Bucket Rate Limiter
 // ============================================================================
 export function extractClientIp(req: {
   headers?: Record<string, string | string[] | undefined>;
   ip?: string;
-  socket?: { remoteAddress?: string };
+  socket?: { remoteAddress?: string | undefined };
 }): string {
-  const xff = req.headers?.['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.trim().length > 0) {
-    return xff.split(',')[0].trim();
-  }
-  if (Array.isArray(xff) && xff.length > 0 && xff[0]) {
-    return xff[0].split(',')[0].trim();
+  const trustedProxy = process.env.TRUSTED_PROXY === 'true';
+  if (trustedProxy) {
+    const xff = req.headers?.['x-forwarded-for'];
+    if (typeof xff === 'string' && xff.trim().length > 0) {
+      return xff.split(',')[0]?.trim() || 'unknown-client';
+    }
+    if (Array.isArray(xff) && xff.length > 0 && xff[0]) {
+      return xff[0].split(',')[0]?.trim() || 'unknown-client';
+    }
   }
   return req.ip || req.socket?.remoteAddress || 'unknown-client';
 }
 
-interface TokenBucketState {
-  tokens: number;
-  lastRefillMs: number;
+function normalizeEndpointPath(rawPath?: string): string {
+  if (!rawPath) return '/api/default';
+  // Normalize /api/v1/xyz or /v1/xyz or /xyz to /api/xyz for endpoint limit lookup
+  let p = rawPath.split('?')[0] || '/';
+  if (p.startsWith('/api/v1/')) {
+    p = '/api/' + p.slice('/api/v1/'.length);
+  } else if (p.startsWith('/v1/')) {
+    p = '/api/' + p.slice('/v1/'.length);
+  } else if (!p.startsWith('/api/')) {
+    p = '/api' + (p.startsWith('/') ? p : '/' + p);
+  }
+  // Match base resource prefix (e.g. /api/family/:id -> /api/family)
+  for (const key of Object.keys(config.rateLimit.endpoints)) {
+    if (p === key || p.startsWith(key + '/')) {
+      return key;
+    }
+  }
+  return p;
 }
 
 export function createTokenBucketRateLimiter(options?: {
   capacity?: number;
   refillPerMinute?: number;
 }) {
-  const capacity = options?.capacity ?? 20;
-  const refillPerMinute = options?.refillPerMinute ?? 20;
-  const refillRatePerMs = refillPerMinute / 60000;
-  const buckets = new Map<string, TokenBucketState>();
+  const customCapacity = options?.capacity;
+  const customRefill = options?.refillPerMinute;
+  const defaultCapacity = customCapacity ?? config.rateLimit.default.capacity;
+  const defaultRefillPerMinute =
+    customRefill ?? config.rateLimit.default.refillPerMinute;
 
-  const check = (clientIp: string): boolean => {
+  const buckets = new Map<string, { tokens: number; lastRefillMs: number }>();
+
+  const check = (clientIp: string, routePath = '/api/default'): boolean => {
     const now = Date.now();
-    let bucket = buckets.get(clientIp);
+    const normalizedPath = normalizeEndpointPath(routePath);
+    const endpointSpecific =
+      customCapacity !== undefined
+        ? undefined
+        : config.rateLimit.endpoints[normalizedPath];
+
+    const capacity = endpointSpecific?.capacity ?? defaultCapacity;
+    const refillPerMinute =
+      endpointSpecific?.refillPerMinute ?? defaultRefillPerMinute;
+    const refillRatePerMs = refillPerMinute / 60000;
+
+    const key = `${clientIp}:${normalizedPath}`;
+    let bucket = buckets.get(key);
     if (!bucket) {
       bucket = { tokens: capacity, lastRefillMs: now };
-      buckets.set(clientIp, bucket);
+      buckets.set(key, bucket);
     } else {
       const elapsed = Math.max(0, now - bucket.lastRefillMs);
       bucket.tokens = Math.min(
@@ -545,11 +701,13 @@ export function createTokenBucketRateLimiter(options?: {
 
   const middleware = (req: Request, res: Response, next: NextFunction) => {
     const clientIp = extractClientIp(req);
-    if (!check(clientIp)) {
+    const fullPath = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
+    if (!check(clientIp, fullPath)) {
       res.setHeader('Retry-After', '3');
       res.status(429).json({
         ok: false,
-        error: 'Rate limit exceeded. Please wait before sending more requests.',
+        error:
+          'Rate limit exceeded. Please wait before sending more requests.',
       });
       return;
     }
@@ -563,4 +721,3 @@ export function createTokenBucketRateLimiter(options?: {
     reset: () => buckets.clear(),
   };
 }
-

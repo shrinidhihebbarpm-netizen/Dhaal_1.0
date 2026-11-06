@@ -33,6 +33,7 @@ import {
   ScamAnalysisResult,
 } from '../utils/scamEngine';
 import { LOCALIZED_COPY, PRESET_SCENARIOS, EvidenceItem, FamilyMember } from '../utils/seedData';
+import { apiFetch } from '../context/AuthContext';
 
 interface InterceptorViewProps {
   language: LanguageMode;
@@ -179,7 +180,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
       setTelegramNotice(null);
     }
     try {
-      const resp = await fetch('/api/telegram/sync', {
+      const resp = await apiFetch('/api/telegram/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,7 +229,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
 
   useEffect(() => {
     let mounted = true;
-    fetch('/api/telegram/status')
+    apiFetch('/api/telegram/status')
       .then((r) => r.json())
       .then((data) => {
         if (!mounted) return;
@@ -307,7 +308,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
 
     try {
       const base64Data = await fileToBase64(file);
-      const resp = await fetch('/api/analyze-media', {
+      const resp = await apiFetch('/api/analyze-media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -369,7 +370,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
 
     try {
       const base64Data = await fileToBase64(file);
-      const resp = await fetch('/api/analyze-media', {
+      const resp = await apiFetch('/api/analyze-media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -476,7 +477,7 @@ export const InterceptorView: React.FC<InterceptorViewProps> = ({
             extractionSource: 'Browser Microphone Recording Transcribed',
           });
           const base64Data = await fileToBase64(blob);
-          const resp = await fetch('/api/analyze-media', {
+          const resp = await apiFetch('/api/analyze-media', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

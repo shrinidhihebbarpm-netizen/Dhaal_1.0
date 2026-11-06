@@ -3,6 +3,7 @@ import { ArrowRight, Upload, Volume2, QrCode, Copy, Check, Send } from 'lucide-r
 import { LanguageMode } from '../utils/scamEngine';
 import { PRESET_SCENARIOS } from '../utils/seedData';
 import { StackingCardsDeck } from './StackingCardsDeck';
+import { apiFetch } from '../context/AuthContext';
 
 interface StoryLandingViewProps {
   language: LanguageMode;
@@ -26,7 +27,7 @@ export const StoryLandingView: React.FC<StoryLandingViewProps> = ({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/telegram/status')
+    apiFetch('/api/telegram/status')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active || !data) return;

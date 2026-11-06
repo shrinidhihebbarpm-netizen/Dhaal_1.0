@@ -26,22 +26,11 @@ import {
   ScamGraphNode,
   FamilyMember,
   EvidenceItem,
+  inferGraphNodeType,
 } from './utils/seedData';
+import { ensureAuthSession, apiFetch } from './context/AuthContext';
 
 type ActiveTab = 'story' | 'interceptor' | 'radar' | 'family';
-
-function inferNodeType(label: string): ScamGraphNode['type'] {
-  const lower = label.toLowerCase();
-  if (lower.includes('@')) return 'MULE_UPI';
-  if (/^\+?\d[\d\s-]{6,}$/.test(label.trim())) return 'SPOOF_PHONE';
-  if (lower.includes('http') || lower.includes('.com') || lower.includes('.in') || lower.includes('.apk') || lower.includes('tg://')) {
-    return 'PHISH_DOMAIN';
-  }
-  if (lower.includes('hdfc') || lower.includes('sbi') || lower.includes('icici') || lower.includes('axis') || lower.includes('a/c') || /\b\d{9,18}\b/.test(lower)) {
-    return 'BANK_AC';
-  }
-  return 'CAMPAIGN_CLUSTER';
-}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('story');
@@ -156,12 +145,12 @@ export default function App() {
         .map((c) => c.trim())
         .filter(Boolean)
         .forEach((connLabel) => {
-          const connNode = upsertNode(connLabel, inferNodeType(connLabel), primary.source);
+          const connNode = upsertNode(connLabel, inferGraphNodeType(connLabel), primary.source);
           linkNodes(primaryNode, connNode);
         });
 
       // Fix #5: Persist nodes to server scamReports.json
-      fetch('/api/scam-reports/upsert', {
+      apiFetch('/api/scam-reports/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,32 +260,34 @@ export default function App() {
 
   // Load persisted family members, scam reports, and complaint drafts on mount
   useEffect(() => {
-    fetch('/api/family')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && Array.isArray(data.members)) {
-          setFamilyMembers(data.members);
-        }
-      })
-      .catch(() => {});
+    void ensureAuthSession().then(() => {
+      apiFetch('/api/family')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.members)) {
+            setFamilyMembers(data.members);
+          }
+        })
+        .catch(() => {});
 
-    fetch('/api/scam-reports')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
-          setScamGraphNodes(data.nodes);
-        }
-      })
-      .catch(() => {});
+      apiFetch('/api/scam-reports')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
+            setScamGraphNodes(data.nodes);
+          }
+        })
+        .catch(() => {});
 
-    fetch('/api/complaint-drafts')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && Array.isArray(data.drafts) && data.drafts.length > 0) {
-          setComplaintDraft(data.drafts[0]);
-        }
-      })
-      .catch(() => {});
+      apiFetch('/api/complaint-drafts')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.drafts) && data.drafts.length > 0) {
+            setComplaintDraft(data.drafts[0]);
+          }
+        })
+        .catch(() => {});
+    });
   }, []);
 
   const handleAlertFamily = (reason: string) => {
@@ -308,7 +299,7 @@ export default function App() {
       }))
     );
     // Dispatch alert to configured Family Telegram group (Fix #3)
-    fetch('/api/family/alert', {
+    apiFetch('/api/family/alert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -334,7 +325,7 @@ export default function App() {
       status: 'PROTECTED',
     };
     setFamilyMembers((prev) => [...prev, newMember]);
-    fetch('/api/family', {
+    apiFetch('/api/family', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newMember),
@@ -343,7 +334,7 @@ export default function App() {
 
   const handleRemoveFamilyMember = (id: string) => {
     setFamilyMembers((prev) => prev.filter((m) => m.id !== id));
-    fetch(`/api/family/${encodeURIComponent(id)}`, {
+    apiFetch(`/api/family/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }).catch(() => {});
   };
@@ -352,7 +343,7 @@ export default function App() {
     setFamilyMembers((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
     );
-    fetch(`/api/family/${encodeURIComponent(id)}`, {
+    apiFetch(`/api/family/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -548,7 +539,7 @@ export default function App() {
               onAddNodesWithConnections={handleAddNodesWithConnections}
               onClearNodes={() => {
                 setScamGraphNodes([]);
-                fetch('/api/scam-reports/clear', { method: 'POST' }).catch(() => {});
+                apiFetch('/api/scam-reports/clear', { method: 'POST' }).catch(() => {});
               }}
               onGoToInterceptor={() => setActiveTab('interceptor')}
               language={language}

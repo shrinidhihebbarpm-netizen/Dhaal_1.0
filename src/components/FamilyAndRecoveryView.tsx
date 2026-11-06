@@ -15,6 +15,7 @@ import {
   evaluateUnfreezePetition,
 } from '../utils/scamEngine';
 import { FamilyMember, EvidenceItem } from '../utils/seedData';
+import { apiFetch } from '../context/AuthContext';
 
 interface FamilyAndRecoveryViewProps {
   familyMembers: FamilyMember[];
@@ -78,7 +79,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
 
   // Load persisted settings on mount
   useEffect(() => {
-    fetch('/api/settings')
+    apiFetch('/api/settings')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data) return;
@@ -97,7 +98,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
         setDuressServerProtocol('STANDBY');
         return;
       }
-      fetch('/api/duress/check', {
+      apiFetch('/api/duress/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spokenTranscript: spokenTestPhrase }),
@@ -144,7 +145,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
 
   // Load persisted unfreeze cases on mount
   useEffect(() => {
-    fetch('/api/unfreeze-cases')
+    apiFetch('/api/unfreeze-cases')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.cases && Array.isArray(data.cases) && data.cases.length > 0) {
@@ -174,7 +175,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
     e.preventDefault();
     if (!secretDuressWordInput.trim()) return;
     try {
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duressWord: secretDuressWordInput.trim() }),
@@ -193,7 +194,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
   const handleSaveFamilyTelegramChatId = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ familyTelegramChatId: familyTelegramChatId.trim() }),
@@ -240,7 +241,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
     const next = `${pick}-${num}`;
     setDailyCode(next);
     try {
-      await fetch('/api/settings', {
+      await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dailyCode: next }),
@@ -306,7 +307,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
       navigator.clipboard.writeText(unfreezeAssessment.petitionText).catch(() => {});
     }
     // Persist unfreeze case to server
-    fetch('/api/unfreeze-cases', {
+    apiFetch('/api/unfreeze-cases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

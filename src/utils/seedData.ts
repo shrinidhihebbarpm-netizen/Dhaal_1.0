@@ -24,6 +24,32 @@ export interface ScamGraphNode {
   connections: string[];
 }
 
+export function inferGraphNodeType(label: string): ScamGraphNode['type'] {
+  const lower = label.toLowerCase();
+  if (lower.includes('@')) return 'MULE_UPI';
+  if (/^\+?\d[\d\s-]{6,}$/.test(label.trim())) return 'SPOOF_PHONE';
+  if (
+    lower.includes('http') ||
+    lower.includes('.com') ||
+    lower.includes('.in') ||
+    lower.includes('.apk') ||
+    lower.includes('tg://')
+  ) {
+    return 'PHISH_DOMAIN';
+  }
+  if (
+    lower.includes('hdfc') ||
+    lower.includes('sbi') ||
+    lower.includes('icici') ||
+    lower.includes('axis') ||
+    lower.includes('a/c') ||
+    /\b\d{9,18}\b/.test(lower)
+  ) {
+    return 'BANK_AC';
+  }
+  return 'CAMPAIGN_CLUSTER';
+}
+
 export interface FamilyMember {
   id: string;
   name: string;
