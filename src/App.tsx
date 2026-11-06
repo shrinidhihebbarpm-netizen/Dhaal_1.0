@@ -9,7 +9,10 @@ import { StoryLandingView } from './components/StoryLandingView';
 import { InterceptorView } from './components/InterceptorView';
 import { ScamRadarView } from './components/ScamRadarView';
 import { FamilyAndRecoveryView } from './components/FamilyAndRecoveryView';
+import { ViewErrorBoundary } from './components/ViewErrorBoundary';
 import { MagnificationDock, DockItemData } from './components/MagnificationDock';
+
+
 import {
   LanguageMode,
   ScamAnalysisResult,
@@ -157,9 +160,21 @@ export default function App() {
           linkNodes(primaryNode, connNode);
         });
 
+      // Fix #5: Persist nodes to server scamReports.json
+      fetch('/api/scam-reports/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          primary,
+          connectedLabels,
+          existingParentId,
+        }),
+      }).catch(() => {});
+
       return next;
     });
   };
+
 
   // Automatically sync extracted IOCs & connected entities from user scans/uploads into Scam Radar
   const handleSyncAnalysisToRadar = (analysis: ScamAnalysisResult, sourceLabel: string) => {
@@ -254,6 +269,36 @@ export default function App() {
     setActiveTab('family');
   };
 
+  // Load persisted family members, scam reports, and complaint drafts on mount
+  useEffect(() => {
+    fetch('/api/family')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.members)) {
+          setFamilyMembers(data.members);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/scam-reports')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
+          setScamGraphNodes(data.nodes);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/complaint-drafts')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.drafts) && data.drafts.length > 0) {
+          setComplaintDraft(data.drafts[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleAlertFamily = (reason: string) => {
     setFamilyAlertStatus(`EMERGENCY ALERT SENT TO FAMILY CIRCLE: ${reason}`);
     setFamilyMembers((prev) =>
@@ -262,6 +307,15 @@ export default function App() {
         status: 'IN_CALL_WATCH',
       }))
     );
+    // Dispatch alert to configured Family Telegram group (Fix #3)
+    fetch('/api/family/alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alertType: 'CRITICAL_SCAM_INTERCEPT',
+        message: `🚨 *DHAAL EMERGENCY ALERT*: An interceptor event was triggered for your family member.\nReason: ${reason}`,
+      }),
+    }).catch(() => {});
   };
 
   const handleAddFamilyMember = (memberInput: {
@@ -280,17 +334,31 @@ export default function App() {
       status: 'PROTECTED',
     };
     setFamilyMembers((prev) => [...prev, newMember]);
+    fetch('/api/family', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMember),
+    }).catch(() => {});
   };
 
   const handleRemoveFamilyMember = (id: string) => {
     setFamilyMembers((prev) => prev.filter((m) => m.id !== id));
+    fetch(`/api/family/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   };
 
   const handleUpdateFamilyMember = (id: string, patch: Partial<FamilyMember>) => {
     setFamilyMembers((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
     );
+    fetch(`/api/family/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
   };
+
 
   const navItems: Array<{ id: ActiveTab; label: string }> = [
     { id: 'story', label: 'Story' },
@@ -445,50 +513,61 @@ export default function App() {
         </div>
 
         {activeTab === 'story' && (
-          <StoryLandingView
-            language={language}
-            onLanguageChange={setLanguage}
-            onLaunchInterceptor={handleLaunchInterceptor}
-            onNavigateTab={setActiveTab}
-            onQuickAlertFamily={() => handleAlertFamily('Triggered from Live Intercept Preview')}
-          />
+          <ViewErrorBoundary viewName="Story Landing">
+            <StoryLandingView
+              language={language}
+              onLanguageChange={setLanguage}
+              onLaunchInterceptor={handleLaunchInterceptor}
+              onNavigateTab={setActiveTab}
+              onQuickAlertFamily={() => handleAlertFamily('Triggered from Live Intercept Preview')}
+            />
+          </ViewErrorBoundary>
         )}
 
         {activeTab === 'interceptor' && (
-          <InterceptorView
-            language={language}
-            onLanguageChange={setLanguage}
-            initialPayload={interceptorPayload}
-            onAddEvidence={handleAddEvidence}
-            onPushToComplaintDraft={handlePushToComplaintDraft}
-            onAlertFamily={handleAlertFamily}
-            familyAlertStatus={familyAlertStatus}
-            onSyncAnalysisToRadar={handleSyncAnalysisToRadar}
-            onNavigateToRadar={() => setActiveTab('radar')}
-            familyMembers={familyMembers}
-          />
+          <ViewErrorBoundary viewName="Live Interceptor">
+            <InterceptorView
+              language={language}
+              onLanguageChange={setLanguage}
+              initialPayload={interceptorPayload}
+              onAddEvidence={handleAddEvidence}
+              onPushToComplaintDraft={handlePushToComplaintDraft}
+              onAlertFamily={handleAlertFamily}
+              familyAlertStatus={familyAlertStatus}
+              onSyncAnalysisToRadar={handleSyncAnalysisToRadar}
+              onNavigateToRadar={() => setActiveTab('radar')}
+              familyMembers={familyMembers}
+            />
+          </ViewErrorBoundary>
         )}
 
         {activeTab === 'radar' && (
-          <ScamRadarView
-            nodes={scamGraphNodes}
-            onAddNodesWithConnections={handleAddNodesWithConnections}
-            onClearNodes={() => setScamGraphNodes([])}
-            onGoToInterceptor={() => setActiveTab('interceptor')}
-            language={language}
-          />
+          <ViewErrorBoundary viewName="Scam Radar">
+            <ScamRadarView
+              nodes={scamGraphNodes}
+              onAddNodesWithConnections={handleAddNodesWithConnections}
+              onClearNodes={() => {
+                setScamGraphNodes([]);
+                fetch('/api/scam-reports/clear', { method: 'POST' }).catch(() => {});
+              }}
+              onGoToInterceptor={() => setActiveTab('interceptor')}
+              language={language}
+            />
+          </ViewErrorBoundary>
         )}
 
         {activeTab === 'family' && (
-          <FamilyAndRecoveryView
-            familyMembers={familyMembers}
-            onAddFamilyMember={handleAddFamilyMember}
-            onRemoveFamilyMember={handleRemoveFamilyMember}
-            onUpdateFamilyMember={handleUpdateFamilyMember}
-            evidenceList={evidenceList}
-            complaintDraft={complaintDraft}
-            onUpdateComplaintDraft={setComplaintDraft}
-          />
+          <ViewErrorBoundary viewName="Family & Recovery">
+            <FamilyAndRecoveryView
+              familyMembers={familyMembers}
+              onAddFamilyMember={handleAddFamilyMember}
+              onRemoveFamilyMember={handleRemoveFamilyMember}
+              onUpdateFamilyMember={handleUpdateFamilyMember}
+              evidenceList={evidenceList}
+              complaintDraft={complaintDraft}
+              onUpdateComplaintDraft={setComplaintDraft}
+            />
+          </ViewErrorBoundary>
         )}
       </main>
 

@@ -62,12 +62,57 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
   const [dailyCode, setDailyCode] = useState<string>('KAVACH-749');
   const [codeSyncedMsg, setCodeSyncedMsg] = useState<string | null>(null);
 
-  // Secret Duress Word state
-  const [secretDuressWord, setSecretDuressWord] = useState<string>('Neelkanth');
+  // Secret Duress Word state (Fix #4: never hardcoded, configured via settings UI)
+  const [secretDuressWordInput, setSecretDuressWordInput] = useState<string>('');
+  const [duressWordConfigured, setDuressWordConfigured] = useState<boolean>(false);
+  const [duressSavedBanner, setDuressSavedBanner] = useState<string | null>(null);
   const [spokenTestPhrase, setSpokenTestPhrase] = useState<string>(
-    'Papa, the officer is asking where my Neelkanth folder is kept.'
+    'Papa, the officer is asking where my safety folder is kept.'
   );
-  const duressResult = checkDuressTrigger(spokenTestPhrase, secretDuressWord);
+  const [duressServerTriggered, setDuressServerTriggered] = useState<boolean>(false);
+  const [duressServerProtocol, setDuressServerProtocol] = useState<string>('STANDBY');
+
+  // Fix #3: Family Telegram Group Chat ID setting
+  const [familyTelegramChatId, setFamilyTelegramChatId] = useState<string>('');
+  const [familyTelegramSavedBanner, setFamilyTelegramSavedBanner] = useState<string | null>(null);
+
+  // Load persisted settings on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        if (data.dailyCode) setDailyCode(data.dailyCode);
+        if (data.familyTelegramChatId) setFamilyTelegramChatId(data.familyTelegramChatId);
+        setDuressWordConfigured(Boolean(data.duressWordConfigured));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Check duress trigger via server API (Fix #4: duress word compared server-side)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!spokenTestPhrase.trim()) {
+        setDuressServerTriggered(false);
+        setDuressServerProtocol('STANDBY');
+        return;
+      }
+      fetch('/api/duress/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spokenTranscript: spokenTestPhrase }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && typeof data.triggered === 'boolean') {
+            setDuressServerTriggered(data.triggered);
+            setDuressServerProtocol(data.silentProtocol || 'STANDBY');
+          }
+        })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [spokenTestPhrase]);
 
   // Consensual Family Drill Call state
   const [selectedMemberId, setSelectedMemberId] = useState<string>(familyMembers[0]?.id || '');
@@ -97,6 +142,23 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
   const [ackNumber1930, setAckNumber1930] = useState<string>('30811260049182');
   const [copiedPetition, setCopiedPetition] = useState<boolean>(false);
 
+  // Load persisted unfreeze cases on mount
+  useEffect(() => {
+    fetch('/api/unfreeze-cases')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.cases && Array.isArray(data.cases) && data.cases.length > 0) {
+          const first = data.cases[0];
+          if (first.bankName) setBankName(first.bankName);
+          if (first.accountMask) setAccountMask(first.accountMask);
+          if (first.totalBalanceInr) setTotalBalanceInr(first.totalBalanceInr);
+          if (first.disputedTransactionInr) setDisputedTransactionInr(first.disputedTransactionInr);
+          if (first.ackNumber1930) setAckNumber1930(first.ackNumber1930);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const readiness = computeDraftReadiness(complaintDraft);
   const unfreezeAssessment = evaluateUnfreezePetition({
     bankName,
@@ -107,6 +169,43 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
     policeNoticeStation,
     ackNumber1930,
   });
+
+  const handleSaveDuressWord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secretDuressWordInput.trim()) return;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duressWord: secretDuressWordInput.trim() }),
+      });
+      if (res.ok) {
+        setDuressWordConfigured(true);
+        setDuressSavedBanner('Duress codeword encrypted and saved server-side.');
+        setSecretDuressWordInput('');
+        setTimeout(() => setDuressSavedBanner(null), 4000);
+      }
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleSaveFamilyTelegramChatId = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ familyTelegramChatId: familyTelegramChatId.trim() }),
+      });
+      if (res.ok) {
+        setFamilyTelegramSavedBanner('Family Telegram Group ID saved successfully.');
+        setTimeout(() => setFamilyTelegramSavedBanner(null), 4000);
+      }
+    } catch {
+      // Non-blocking
+    }
+  };
 
   const handleAddMemberSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,18 +233,28 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
     setNewEntityPhone('');
   };
 
-  const handleRotateDailyCode = () => {
+  const handleRotateDailyCode = async () => {
     const words = ['TRISHUL', 'SANKALP', 'DRISHTI', 'PRANAAM', 'SURAKSHA'];
     const pick = words[Math.floor(Math.random() * words.length)];
     const num = Math.floor(100 + Math.random() * 899);
     const next = `${pick}-${num}`;
     setDailyCode(next);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dailyCode: next }),
+      });
+    } catch {
+      // Non-blocking
+    }
     setCodeSyncedMsg(
       familyMembers.length > 0
         ? `Encrypted Daily Code rotated to ${next} and synced across your ${familyMembers.length} trusted circle member(s).`
         : `Encrypted Daily Code rotated to ${next}. Add family or trusted entities below to share this code.`
     );
   };
+
 
   const handleRunFamilyDrill = () => {
     const member = familyMembers.find((m) => m.id === selectedMemberId);
@@ -196,9 +305,25 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(unfreezeAssessment.petitionText).catch(() => {});
     }
+    // Persist unfreeze case to server
+    fetch('/api/unfreeze-cases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bankName,
+        accountMask,
+        totalBalanceInr,
+        disputedTransactionInr,
+        freezeType,
+        policeNoticeStation,
+        ackNumber1930,
+        createdAt: new Date().toISOString(),
+      }),
+    }).catch(() => {});
     setCopiedPetition(true);
     setTimeout(() => setCopiedPetition(false), 3000);
   };
+
 
   return (
     <div className="space-y-10 pb-16">
@@ -544,21 +669,78 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
           </p>
 
           <div className="space-y-4 font-mono text-xs">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="duress-word-input"
-                className="block text-[11px] uppercase tracking-[0.08em] text-[#6b6b6b] dark:text-[#9ca3af]"
-              >
-                Configured Family Duress Codeword
-              </label>
-              <input
-                id="duress-word-input"
-                type="text"
-                value={secretDuressWord}
-                onChange={(e) => setSecretDuressWord(e.target.value)}
-                className="w-full bg-[#f8f7f4] dark:bg-[#0f1115] border border-[#ddd] dark:border-[#262b36] p-2.5 text-[#d42020] dark:text-[#ef4444] font-bold focus:border-[#1a1a1a] dark:focus:border-[#f2f0eb] focus:outline-none"
-              />
-            </div>
+            {/* Fix #4: Configure Duress Codeword (never hardcoded, sent to server, never sent back in plaintext) */}
+            <form onSubmit={handleSaveDuressWord} className="space-y-2 p-3 bg-[#f8f7f4] dark:bg-[#0f1115] border border-[#ddd] dark:border-[#262b36]">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="duress-word-input"
+                  className="block text-[11px] uppercase tracking-[0.08em] text-[#6b6b6b] dark:text-[#9ca3af]"
+                >
+                  Configure Secret Duress Codeword
+                </label>
+                <span className="text-[10px] text-[#2e7d32] dark:text-[#4ade80] font-bold">
+                  {duressWordConfigured ? 'CODEWORD ENCRYPTED ON SERVER' : 'DEFAULT SERVER CODEWORD ACTIVE'}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  id="duress-word-input"
+                  type="text"
+                  placeholder="Enter custom codeword (e.g., Palash, Gulmohar, Amaltas)"
+                  value={secretDuressWordInput}
+                  onChange={(e) => setSecretDuressWordInput(e.target.value)}
+                  className="flex-1 bg-white dark:bg-[#161920] border border-[#ddd] dark:border-[#262b36] p-2 text-[#d42020] dark:text-[#ef4444] font-bold focus:border-[#1a1a1a] dark:focus:border-[#f2f0eb] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!secretDuressWordInput.trim()}
+                  className="px-3 py-2 bg-[#1a1a1a] dark:bg-[#f2f0eb] text-white dark:text-[#0f1115] font-bold text-[11px] uppercase tracking-wider hover:bg-[#333333] dark:hover:bg-white disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                >
+                  Save Codeword
+                </button>
+              </div>
+              {duressSavedBanner && (
+                <div className="text-[11px] text-[#2e7d32] dark:text-[#4ade80] font-bold">
+                  {duressSavedBanner}
+                </div>
+              )}
+            </form>
+
+            {/* Fix #3: Family Telegram Group Chat ID */}
+            <form onSubmit={handleSaveFamilyTelegramChatId} className="space-y-2 p-3 bg-[#f8f7f4] dark:bg-[#0f1115] border border-[#ddd] dark:border-[#262b36]">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="family-telegram-chat-id"
+                  className="block text-[11px] uppercase tracking-[0.08em] text-[#6b6b6b] dark:text-[#9ca3af]"
+                >
+                  Family Telegram Group Chat ID
+                </label>
+                <span className="text-[10px] text-[#6b6b6b] dark:text-[#9ca3af]">
+                  Auto-Dispatches Duress &amp; Critical Alerts
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  id="family-telegram-chat-id"
+                  type="text"
+                  placeholder="e.g. -1001234567890 or @family_circle_chat"
+                  value={familyTelegramChatId}
+                  onChange={(e) => setFamilyTelegramChatId(e.target.value)}
+                  className="flex-1 bg-white dark:bg-[#161920] border border-[#ddd] dark:border-[#262b36] p-2 text-[#1a1a1a] dark:text-[#f2f0eb] focus:border-[#1a1a1a] dark:focus:border-[#f2f0eb] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 bg-[#1a1a1a] dark:bg-[#f2f0eb] text-white dark:text-[#0f1115] font-bold text-[11px] uppercase tracking-wider hover:bg-[#333333] dark:hover:bg-white cursor-pointer shrink-0"
+                >
+                  Save Group ID
+                </button>
+              </div>
+              {familyTelegramSavedBanner && (
+                <div className="text-[11px] text-[#2e7d32] dark:text-[#4ade80] font-bold">
+                  {familyTelegramSavedBanner}
+                </div>
+              )}
+            </form>
 
             <div className="space-y-1.5">
               <label
@@ -579,7 +761,7 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
             {/* Duress Detection Status Box */}
             <div
               className={`p-4 border space-y-1.5 ${
-                duressResult.triggered
+                duressServerTriggered
                   ? 'bg-[#fef2f2] dark:bg-[#2a1215] border-[#d42020] dark:border-[#ef4444] text-[#1a1a1a] dark:text-[#f2f0eb]'
                   : 'bg-[#f8f7f4] dark:bg-[#0f1115] border-[#ddd] dark:border-[#262b36] text-[#6b6b6b] dark:text-[#9ca3af]'
               }`}
@@ -587,21 +769,21 @@ export const FamilyAndRecoveryView: React.FC<FamilyAndRecoveryViewProps> = ({
               <div className="flex items-center justify-between font-bold">
                 <span>
                   DURESS DETECTOR:{' '}
-                  {duressResult.triggered
-                    ? `TRIGGERED ON "${duressResult.matchedWord}"`
+                  {duressServerTriggered
+                    ? 'TRIGGERED (CODEWORD DETECTED ON SERVER)'
                     : 'LISTENING IN STANDBY'}
                 </span>
                 <span
                   className={
-                    duressResult.triggered
+                    duressServerTriggered
                       ? 'text-[#d42020] dark:text-[#ef4444]'
                       : 'text-[#2e7d32] dark:text-[#4ade80]'
                   }
                 >
-                  {duressResult.triggered ? 'SILENT SOS SENT' : 'NO TRIGGER'}
+                  {duressServerTriggered ? 'SILENT SOS DISPATCHED' : 'NO TRIGGER'}
                 </span>
               </div>
-              <p className="text-xs text-[#6b6b6b] dark:text-[#9ca3af]">{duressResult.silentProtocol}</p>
+              <p className="text-xs text-[#6b6b6b] dark:text-[#9ca3af]">{duressServerProtocol}</p>
             </div>
           </div>
 

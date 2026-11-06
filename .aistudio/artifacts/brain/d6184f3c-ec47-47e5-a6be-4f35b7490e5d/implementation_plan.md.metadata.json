@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan to add the closing Telegram Bot QR Code section (auto-linked to the connected bot or custom username) at the end of the Story Landing Page, and wire silent Background AI Guard prompt-injection tripwires into the core scam analysis pipeline.",
-  "updatedAt":  "2026-10-31T11:06:08.346689535Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
